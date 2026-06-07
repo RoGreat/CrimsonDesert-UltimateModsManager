@@ -43,6 +43,9 @@ reviewcode_diff.patch
 # assets/cdumm-logo.png by scripts/build-macos.sh on every build.
 cdumm.icns
 
+# Linux
+result
+
 # Local-only reference material (firecrawl pulls, mod page caches,
 # external code references). Never committed.
 .firecrawl/
