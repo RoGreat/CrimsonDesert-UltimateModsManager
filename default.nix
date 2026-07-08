@@ -7,12 +7,13 @@
   privatebin,
   pyside6-fluent-widgets,
   python3Packages,
+  qt6,
   xvfb,
 }:
 
 python3Packages.buildPythonApplication (finalAttrs: {
   pname = "crimsondesert-ultimatemodsmanager";
-  version = "3.3.17";
+  version = "3.5.0";
   pyproject = true;
 
   src = ./.;
@@ -25,20 +26,29 @@ python3Packages.buildPythonApplication (finalAttrs: {
     "pyside6-essentials"
   ];
 
-  dependencies = with python3Packages; [
-    bsdiff4
+  nativeBuildInputs = [
+    copyDesktopItems
+    imagemagick
+    qt6.wrapQtAppsHook
+  ];
+
+  dependencies = [
     cdumm-native
+    privatebin
+    pyside6-fluent-widgets
+    qt6.qtbase
+  ]
+  ++ (with python3Packages; [
+    bsdiff4
     cryptography
     lxml
     lz4
-    privatebin
     psutil
     py7zr
     pyside6
-    pyside6-fluent-widgets
     websocket-client
     xxhash
-  ];
+  ]);
 
   nativeCheckInputs = [
     xvfb
@@ -50,15 +60,14 @@ python3Packages.buildPythonApplication (finalAttrs: {
   ]);
 
   disabledTestPaths = [
-    "tests/test_pamt_cache_honors_cdmods_path.py::test_pamt_cache_uses_parent_when_called_with_vanilla"
-    "tests/test_pamt_cache_honors_cdmods_path.py::test_pamt_cache_uses_pointer_for_real_game_dir"
-    "tests/test_platform.py::TestOpenPathErrorLogging::test_oserror_logs_path_and_reason"
-    "tests/test_transactional_io_absolute_path_guard.py::test_stage_file_rejects_absolute_path"
+    # Fail on rerun
+    "tests/test_script_import_consent_gate.py::test_script_import_runs_with_consent"
+    # Slow on rerun
+    "tests/test_f3_whole_table_rebuild.py"
   ];
 
-  nativeBuildInputs = [
-    copyDesktopItems
-    imagemagick
+  disabledTestMarks = [
+    "slow"
   ];
 
   desktopItems = [
@@ -73,36 +82,35 @@ python3Packages.buildPythonApplication (finalAttrs: {
     })
   ];
 
-  prePatch = ''
-    cat >> pyproject.toml << EOL
-
-    [project.scripts]
-    cdumm = "cdumm.main:main"
-    EOL
-
+  postPatch = ''
+    substituteInPlace src/cdumm/main.py \
+        --replace-fail "Path(__file__).resolve().parents[2]" "Path(__file__).resolve().parents[1]"
     substituteInPlace src/cdumm/engine/nxm_handler.py \
-        --replace-fail "{exe} -m" \
-        "env PYTHONPATH=@out@/${python3Packages.python.sitePackages}:@PYTHONPATH@ {exe} -m" \
-            --subst-var out \
-            --subst-var PYTHONPATH
+        --replace-fail "{exe} -m cdumm.main" "cdumm"
   '';
 
   postInstall = ''
+    mkdir -p $out/bin
+    echo "#!/bin/sh" > $out/bin/cdumm
+    echo "exec ${python3Packages.python.interpreter} $out/${python3Packages.python.sitePackages}/cdumm/main.py \"\$@\"" >> $out/bin/cdumm
+    chmod +x $out/bin/cdumm
+
     cp -a src/cdumm/translations $out/${python3Packages.python.sitePackages}/cdumm
     cp -a schemas $out/${python3Packages.python.sitePackages}
     cp -a field_schema $out/${python3Packages.python.sitePackages}
+
     for i in 16 24 48 64 96 128 256 512 1024; do
-      mkdir -p $out/share/icons/hicolor/''${i}x''${i}/apps
-      magick assets/cdumm-logo.png -resize ''${i}x''${i}  \
-        $out/share/icons/hicolor/''${i}x''${i}/apps/cdumm.png
+        mkdir -p $out/share/icons/hicolor/''${i}x''${i}/apps
+        magick assets/cdumm-logo.png -resize ''${i}x''${i}  \
+            $out/share/icons/hicolor/''${i}x''${i}/apps/cdumm.png
     done
     cp -a assets $out/${python3Packages.python.sitePackages}
   '';
 
+  dontWrapQtApps = true;
+
   preFixup = ''
-    makeWrapperArgs+=(
-      --prefix PYTHONPATH : "$out/${python3Packages.python.sitePackages}:$PYTHONPATH"
-    )
+    wrapQtApp $out/bin/cdumm --prefix PYTHONPATH : "$out/${python3Packages.python.sitePackages}:$PYTHONPATH"
   '';
 
   meta = {
